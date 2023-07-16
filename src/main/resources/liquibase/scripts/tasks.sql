@@ -11,3 +11,6 @@ alter table notification_task alter column chatId type bigint;
 
 -- changeset dKovachev:3
 alter table notification_task drop column chatId;
+
+-- changeset dKovachev:4
+alter table notification_task add column id bigint;
