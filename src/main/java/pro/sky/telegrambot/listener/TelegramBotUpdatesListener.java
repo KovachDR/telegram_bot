@@ -8,7 +8,9 @@ import com.pengrad.telegrambot.response.SendResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import pro.sky.telegrambot.model.NotificationTask;
 import pro.sky.telegrambot.repository.NotificationTaskRepository;
@@ -16,9 +18,12 @@ import pro.sky.telegrambot.repository.NotificationTaskRepository;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class TelegramBotUpdatesListener implements UpdatesListener {
@@ -50,16 +55,13 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
             Matcher matcher = pattern.matcher(messageText);
             if (messageText.equals("/start")) {
                 answerStartCommand(chatId, update.message().chat().firstName());
-            }
-            else if (matcher.matches()) {
+            } else if (matcher.matches()) {
                 String time = matcher.group(1);
                 String task = matcher.group(3);
                 LocalDateTime localDateTime = LocalDateTime.parse(time, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
                 NotificationTask notificationTask = new NotificationTask(chatId, task, localDateTime);
                 sendMessage(chatId, "Паттерн подходит");
                 createTask(notificationTask);
-            } else {
-                sendMessage(chatId,"Паттерн не тот");
             }
 
         });
@@ -71,7 +73,7 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         sendMessage(chatId, answer);
     }
 
-    private void sendMessage(long chatId, String messageToSend) {
+    public void sendMessage(long chatId, String messageToSend) {
         SendMessage message = new SendMessage(chatId, messageToSend);
         SendResponse response = telegramBot.execute(message);
     }
@@ -80,4 +82,15 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         notificationTaskRepository.save(notificationTask);
         return ResponseEntity.ok().build();
     }
+
+    @Scheduled(cron = "0 * * * * *")
+    public void run() {
+        LocalDateTime checkTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        List<NotificationTask> notificationTasks = notificationTaskRepository.findByTime(checkTime);
+        for (NotificationTask notificationTask : notificationTasks) {
+            sendMessage(notificationTask.getChatId(), notificationTask.getTask());
+        }
+
+    }
 }
+
