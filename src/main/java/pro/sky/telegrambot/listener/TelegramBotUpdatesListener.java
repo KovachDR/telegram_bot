@@ -8,7 +8,6 @@ import com.pengrad.telegrambot.response.SendResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -19,16 +18,14 @@ import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 public class TelegramBotUpdatesListener implements UpdatesListener {
 
-    private Logger logger = LoggerFactory.getLogger(TelegramBotUpdatesListener.class);
+    private final Logger logger = LoggerFactory.getLogger(TelegramBotUpdatesListener.class);
 
     @Autowired
     private TelegramBot telegramBot;
@@ -48,7 +45,6 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     public int process(List<Update> updates) {
         updates.forEach(update -> {
             logger.info("Processing update: {}", update);
-            // Process your updates here
             String messageText = update.message().text();
             Long chatId = update.message().chat().id();
             Pattern pattern = Pattern.compile("([0-9\\.\\:\\s]{16})(\\s)([\\W+]+)");
@@ -60,10 +56,11 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
                 String task = matcher.group(3);
                 LocalDateTime localDateTime = LocalDateTime.parse(time, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
                 NotificationTask notificationTask = new NotificationTask(chatId, task, localDateTime);
-                sendMessage(chatId, "Паттерн подходит");
+                sendMessage(chatId, "Задание добавлено. Вы получите уведомление в указанное вами время.");
                 createTask(notificationTask);
+            } else {
+                sendMessage(chatId, "Некорректный ввод. Введите сообщение в формате дд.мм.гггг чч:мм 'текст задачи'");
             }
-
         });
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
     }
@@ -78,13 +75,12 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         SendResponse response = telegramBot.execute(message);
     }
 
-    private ResponseEntity<NotificationTask> createTask(NotificationTask notificationTask) {
+    private void createTask(NotificationTask notificationTask) {
         notificationTaskRepository.save(notificationTask);
-        return ResponseEntity.ok().build();
     }
 
     @Scheduled(cron = "0 * * * * *")
-    public void run() {
+    public void findAndSendNotificationByTime() {
         LocalDateTime checkTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
         List<NotificationTask> notificationTasks = notificationTaskRepository.findByTime(checkTime);
         for (NotificationTask notificationTask : notificationTasks) {
